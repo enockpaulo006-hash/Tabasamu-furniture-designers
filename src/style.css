@@ -963,9 +963,7 @@ footer > p {
   }
 }
 
-/* =========================================
-   14. LARGE DESKTOP SCREENS
-========================================= */
+/* 14. LARGE DESKTOP SCREENS */
 
 @media (min-width: 1400px) {
   .hero,
