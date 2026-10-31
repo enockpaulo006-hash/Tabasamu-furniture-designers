@@ -984,7 +984,7 @@ a {
   max-width: calc(100% - 30px);
   padding: 11px 15px;
   background: var(--dark);
-  color: white;
+  color: rgb(255, 255, 255);
   border-left: 4px solid var(--yellow);
   border-radius: 5px;
   font-size: 12px;
