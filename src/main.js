@@ -65,10 +65,7 @@ function isOwner(user) {
   )
 }
 
-// ==========================================
 // SAFE CONTENT HELPERS
-// ==========================================
-
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
