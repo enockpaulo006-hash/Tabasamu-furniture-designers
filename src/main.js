@@ -366,7 +366,7 @@ function renderHome() {
           </div>
 
           <button class="text-link" data-page="gallery">
-            View all →
+            View all 
           </button>
         </div>
 
