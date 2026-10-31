@@ -930,7 +930,7 @@ a {
   justify-content: center;
   gap: 8px;
   background: var(--brand-brown);
-  color: white;
+  color: rgb(252, 251, 251);
   border: 0;
   border-radius: 5px;
   font-size: 12px;
