@@ -129,10 +129,8 @@ const icons = {
   right: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
 }
 
-// ==========================================
-// APPLICATION SHELL
-// ==========================================
 
+// APPLICATION SHELL
 function renderShell() {
   app.innerHTML = `
     <header class="top-header">
