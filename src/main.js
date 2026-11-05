@@ -361,7 +361,7 @@ function renderHome() {
 
         <div class="section-title">
           <div>
-            <span class="eyebrow">EXPLORE OUR COLLECTION</span>
+            <span class="eyebrow">EXPLORE OUR COLLECTIONS</span>
             <h2>Featured designs</h2>
           </div>
 
