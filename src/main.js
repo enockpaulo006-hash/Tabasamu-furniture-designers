@@ -1093,11 +1093,6 @@ function renderAdmin() {
 
         <h2>Upload furniture images</h2>
 
-        <p>
-          Select one or several furniture images from your device.
-          Published images will appear in the public Gallery.
-        </p>
-
         <form id="image-upload-form" class="admin-product-form">
 
           <label for="furniture-images">
