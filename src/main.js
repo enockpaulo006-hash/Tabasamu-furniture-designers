@@ -1,4 +1,3 @@
-
 import './style.css'
 import { db, auth } from './firebase.js'
 
@@ -37,6 +36,13 @@ const CLOUDINARY_UPLOAD_URL =
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_IMAGES_PER_UPLOAD = 10
 
+const MAX_IMAGE_DIMENSION = 1600
+const IMAGE_QUALITY = 0.82
+
+const CACHE_KEY_PUBLIC = 'tabasamu_public_products_v1'
+const CACHE_KEY_OWNER = 'tabasamu_owner_products_v1'
+const CACHE_DURATION = 6 * 60 * 60 * 1000
+
 // ==========================================
 // APPLICATION STATE
 // ==========================================
@@ -65,7 +71,10 @@ function isOwner(user) {
   )
 }
 
+// ==========================================
 // SAFE CONTENT HELPERS
+// ==========================================
+
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
@@ -106,7 +115,118 @@ function getImage(product) {
   return safeImageURL(product.image || product.imageUrl || '')
 }
 
+// ==========================================
+// CLOUDINARY IMAGE OPTIMIZATION
+// ==========================================
+
+function getOptimizedImageURL(value, width = 1000) {
+  const safeURL = safeImageURL(value)
+
+  if (!safeURL) return ''
+
+  try {
+    const url = new URL(safeURL)
+
+    if (!url.hostname.endsWith('cloudinary.com')) {
+      return safeURL
+    }
+
+    const uploadPath = '/image/upload/'
+
+    if (!url.pathname.includes(uploadPath)) {
+      return safeURL
+    }
+
+    const transformations =
+      `f_auto,q_auto,w_${width},c_limit`
+
+    url.pathname = url.pathname.replace(
+      uploadPath,
+      `${uploadPath}${transformations}/`
+    )
+
+    return url.href
+  } catch {
+    return safeURL
+  }
+}
+
+function imageAttributes(product, width = 1000) {
+  const image = getOptimizedImageURL(getImage(product), width)
+
+  return `src="${escapeHTML(image)}" loading="lazy" decoding="async"`
+}
+
+// ==========================================
+// LOCAL PRODUCT CACHE
+// ==========================================
+
+function getCacheKey() {
+  return isOwner(auth.currentUser)
+    ? CACHE_KEY_OWNER
+    : CACHE_KEY_PUBLIC
+}
+
+function saveProductsToCache(items) {
+  try {
+    const cache = {
+      savedAt: Date.now(),
+      products: items.map((product) => ({
+        ...product,
+        createdAt: getCreatedTime(product),
+        updatedAt: product.updatedAt?.toMillis
+          ? product.updatedAt.toMillis()
+          : null,
+      })),
+    }
+
+    localStorage.setItem(getCacheKey(), JSON.stringify(cache))
+  } catch (error) {
+    console.warn('Could not save furniture cache:', error)
+  }
+}
+
+function readProductsFromCache() {
+  try {
+    const raw = localStorage.getItem(getCacheKey())
+
+    if (!raw) return null
+
+    const cache = JSON.parse(raw)
+
+    if (!cache.savedAt || !Array.isArray(cache.products)) {
+      return null
+    }
+
+    if (Date.now() - cache.savedAt > CACHE_DURATION) {
+      return null
+    }
+
+    return cache.products
+      .filter((product) => {
+        return isOwner(auth.currentUser) || product.active === true
+      })
+      .filter((product) => getImage(product))
+      .sort((a, b) => getCreatedTime(b) - getCreatedTime(a))
+  } catch (error) {
+    console.warn('Could not read furniture cache:', error)
+    return null
+  }
+}
+
+function clearProductCache() {
+  try {
+    localStorage.removeItem(CACHE_KEY_PUBLIC)
+    localStorage.removeItem(CACHE_KEY_OWNER)
+  } catch (error) {
+    console.warn('Could not clear cache:', error)
+  }
+}
+
+// ==========================================
 // ICONS
+// ==========================================
+
 const icons = {
   home: '<svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg>',
 
@@ -123,8 +243,10 @@ const icons = {
   right: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
 }
 
-
+// ==========================================
 // APPLICATION SHELL
+// ==========================================
+
 function renderShell() {
   app.innerHTML = `
     <header class="top-header">
@@ -235,7 +357,18 @@ app.addEventListener('click', (event) => {
 // FIRESTORE IMAGE COLLECTION
 // ==========================================
 
-async function loadProducts() {
+async function loadProducts(options = {}) {
+  const { showCachedFirst = true } = options
+
+  if (showCachedFirst) {
+    const cachedProducts = readProductsFromCache()
+
+    if (cachedProducts) {
+      products = cachedProducts
+      renderPage()
+    }
+  }
+
   try {
     const productsQuery = isOwner(auth.currentUser)
       ? collection(db, 'products')
@@ -254,7 +387,8 @@ async function loadProducts() {
       .filter((product) => getImage(product))
       .sort((a, b) => getCreatedTime(b) - getCreatedTime(a))
 
-    // Remove selections for designs that are no longer available.
+    saveProductsToCache(products)
+
     for (const id of selectedDesigns) {
       if (!products.some((product) => product.id === id)) {
         selectedDesigns.delete(id)
@@ -266,11 +400,11 @@ async function loadProducts() {
   } catch (error) {
     console.error('Firestore loading failed:', error)
 
-    products = []
-
-    showToast(
-      'Could not load designs. Check your internet connection and Firestore rules.'
-    )
+    if (!products.length) {
+      showToast(
+        'Could not load designs. Check your internet connection and Firestore rules.'
+      )
+    }
   }
 
   renderPage()
@@ -315,8 +449,11 @@ function renderHome() {
 
           <img
             id="slide-image"
-            src="${escapeHTML(getImage(featured[0]))}"
+            src="${escapeHTML(getOptimizedImageURL(getImage(featured[0]), 1400))}"
             alt="Featured furniture design"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
           >
 
           <div class="slide-overlay">
@@ -366,7 +503,7 @@ function renderHome() {
           </div>
 
           <button class="text-link" data-page="gallery">
-            View all 
+            View all
           </button>
         </div>
 
@@ -413,9 +550,8 @@ function renderFeatureCard(type, title, product) {
 
       <div class="feature-image">
         <img
-          src="${escapeHTML(getImage(product))}"
+          ${imageAttributes(product, 600)}
           alt="Furniture design"
-          loading="lazy"
         >
 
         <span class="feature-tag">
@@ -450,7 +586,10 @@ function startSlideshow(slides) {
   function showSlide(index) {
     slideshowIndex = (index + slides.length) % slides.length
 
-    image.src = getImage(slides[slideshowIndex])
+    image.src = getOptimizedImageURL(
+      getImage(slides[slideshowIndex]),
+      1400
+    )
 
     dots.innerHTML = slides.map((_, i) => `
       <button
@@ -519,9 +658,8 @@ function renderProducts() {
 
         <div class="product-image">
           <img
-            src="${escapeHTML(getImage(product))}"
+            ${imageAttributes(product, 700)}
             alt="Furniture design"
-            loading="lazy"
           >
         </div>
 
@@ -555,7 +693,6 @@ function renderProducts() {
         selectedDesigns.add(id)
         showToast('Design added to basket.')
 
-        // Update the popularity count in Firestore.
         try {
           await updateDoc(doc(db, 'products', id), {
             selections: increment(1),
@@ -565,6 +702,7 @@ function renderProducts() {
 
           if (product) {
             product.selections = (product.selections || 0) + 1
+            saveProductsToCache(products)
           }
         } catch (error) {
           console.error('Could not update selection count:', error)
@@ -603,7 +741,7 @@ function renderBasket() {
           <article class="basket-product">
 
             <img
-              src="${escapeHTML(getImage(product))}"
+              ${imageAttributes(product, 400)}
               alt="Selected furniture design"
             >
 
@@ -694,7 +832,6 @@ Thank you!
 
   window.open(url, '_blank', 'noopener,noreferrer')
 }
-
 // ==========================================
 // OWNER LOGIN
 // ==========================================
@@ -756,6 +893,7 @@ function renderLogin() {
       const email = document.querySelector('#owner-email').value.trim()
       const password = document.querySelector('#owner-password').value
       const error = document.querySelector('#login-error')
+
       const submitButton =
         event.currentTarget.querySelector('button[type="submit"]')
 
@@ -779,15 +917,19 @@ function renderLogin() {
 
         if (!isOwner(credential.user)) {
           await signOut(auth)
+
           error.textContent =
             'Access denied. This account is not authorised.'
+
+          submitButton.disabled = false
+          submitButton.textContent = 'Sign in'
           return
         }
 
         currentUser = credential.user
         currentPage = 'admin'
 
-        await loadProducts()
+        await loadProducts({ showCachedFirst: false })
 
         showToast('Welcome to the Admin dashboard.')
 
@@ -809,13 +951,97 @@ function renderLogin() {
 }
 
 // ==========================================
+// IMAGE COMPRESSION
+// ==========================================
+
+async function compressImage(file) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Invalid image file.')
+  }
+
+  let bitmap
+
+  try {
+    bitmap = await createImageBitmap(file)
+  } catch {
+    throw new Error(
+      'This image format cannot be processed by your browser. Try JPG or PNG.'
+    )
+  }
+
+  try {
+    const originalWidth = bitmap.width
+    const originalHeight = bitmap.height
+
+    const scale = Math.min(
+      1,
+      MAX_IMAGE_DIMENSION / Math.max(originalWidth, originalHeight)
+    )
+
+    const width = Math.round(originalWidth * scale)
+    const height = Math.round(originalHeight * scale)
+
+    const canvas = document.createElement('canvas')
+
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext('2d')
+
+    if (!context) {
+      throw new Error('Image compression is not supported.')
+    }
+
+    context.drawImage(bitmap, 0, 0, width, height)
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (result) {
+            resolve(result)
+          } else {
+            reject(new Error('Could not compress this image.'))
+          }
+        },
+        'image/webp',
+        IMAGE_QUALITY
+      )
+    })
+
+    if (blob.type !== 'image/webp') {
+      throw new Error('Your browser does not support WEBP conversion.')
+    }
+
+    const compressedFile = new File(
+      [blob],
+      `${file.name.replace(/\.[^/.]+$/, '')}.webp`,
+      {
+        type: 'image/webp',
+        lastModified: Date.now(),
+      }
+    )
+
+    console.log(
+      `Image compressed: ${(file.size / 1024).toFixed(1)} KB → ${(compressedFile.size / 1024).toFixed(1)} KB`
+    )
+
+    return compressedFile
+
+  } finally {
+    bitmap.close()
+  }
+}
+
+// ==========================================
 // CLOUDINARY IMAGE UPLOAD
 // ==========================================
 
 async function uploadImageToCloudinary(file) {
+  const compressedFile = await compressImage(file)
+
   const formData = new FormData()
 
-  formData.append('file', file)
+  formData.append('file', compressedFile)
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
   formData.append('folder', 'tabasamu/designs')
 
@@ -889,7 +1115,8 @@ function renderAdmin() {
 
           <p class="admin-help">
             Maximum ${MAX_IMAGES_PER_UPLOAD} images per upload.
-            Each image must be 10 MB or smaller.
+            Each original image must be 10 MB or smaller.
+            Images are compressed before uploading.
           </p>
 
           <div
@@ -1042,7 +1269,7 @@ function renderAdmin() {
 
     if (oversizedFile) {
       message.textContent =
-        'Each image must be 10 MB or smaller.'
+        'Each original image must be 10 MB or smaller.'
       return
     }
 
@@ -1057,19 +1284,17 @@ function renderAdmin() {
         const file = files[index]
 
         uploadButton.textContent =
-          `Uploading ${index + 1} of ${files.length}...`
+          `Compressing and uploading ${index + 1} of ${files.length}...`
 
         try {
-          // First upload the image to Cloudinary.
           const cloudinaryResult =
             await uploadImageToCloudinary(file)
 
-          // Then save its URL and metadata in Firestore.
           await addDoc(collection(db, 'products'), {
             image: cloudinaryResult.secure_url,
             publicId: cloudinaryResult.public_id,
-            format: cloudinaryResult.format || '',
-            bytes: cloudinaryResult.bytes || file.size,
+            format: cloudinaryResult.format || 'webp',
+            bytes: cloudinaryResult.bytes || 0,
             active,
             selections: 0,
             createdAt: serverTimestamp(),
@@ -1084,7 +1309,9 @@ function renderAdmin() {
         }
       }
 
-      await loadProducts()
+      clearProductCache()
+
+      await loadProducts({ showCachedFirst: false })
 
       fileInput.value = ''
       clearPreviews()
@@ -1092,13 +1319,17 @@ function renderAdmin() {
 
       if (successfulUploads === files.length) {
         message.textContent = ''
+
         showToast(
           `${successfulUploads} image(s) uploaded successfully.`
         )
+
       } else if (successfulUploads > 0) {
         message.textContent =
           `${successfulUploads} image(s) uploaded. ${errors.length} failed.`
+
         showToast('Some images could not be uploaded.')
+
       } else {
         message.textContent =
           errors[0] || 'No images could be uploaded.'
@@ -1106,6 +1337,7 @@ function renderAdmin() {
 
     } catch (error) {
       console.error('Upload process failed:', error)
+
       message.textContent =
         'An unexpected error occurred. Please try again.'
 
@@ -1117,8 +1349,8 @@ function renderAdmin() {
 
   document.querySelector('#refresh-products-button')
     .addEventListener('click', async () => {
-      await loadProducts()
-      renderAdminProductList()
+      clearProductCache()
+      await loadProducts({ showCachedFirst: false })
     })
 
   document.querySelector('#logout-button')
@@ -1168,7 +1400,7 @@ function renderAdminProductList() {
     <article class="admin-product-item">
 
       <img
-        src="${escapeHTML(getImage(product))}"
+        ${imageAttributes(product, 500)}
         alt="Furniture design"
       >
 
@@ -1225,14 +1457,20 @@ function renderAdminProductList() {
 
         product.active = nextActive
 
+        clearProductCache()
+        saveProductsToCache(products)
+
         renderAdminProductList()
+
         showToast(
           nextActive ? 'Image published.' : 'Image unpublished.'
         )
 
       } catch (error) {
         console.error('Could not update image:', error)
+
         showToast('Could not update image. Check Firestore rules.')
+
         button.disabled = false
       }
     })
@@ -1262,6 +1500,9 @@ function renderAdminProductList() {
 
         selectedDesigns.delete(productId)
 
+        clearProductCache()
+        saveProductsToCache(products)
+
         renderAdminProductList()
         updateBasketCount()
 
@@ -1269,7 +1510,9 @@ function renderAdminProductList() {
 
       } catch (error) {
         console.error('Could not delete image:', error)
+
         showToast('Could not delete image. Check Firestore rules.')
+
         button.disabled = false
       }
     })
@@ -1368,6 +1611,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     renderPage()
+
     showToast('This account is not authorised for Admin access.')
     return
   }
@@ -1390,7 +1634,7 @@ onAuthStateChanged(auth, async (user) => {
 })
 
 // ==========================================
-// START
+// START APPLICATION
 // ==========================================
 
 renderPage()
