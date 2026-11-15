@@ -1114,11 +1114,47 @@ function renderAdmin() {
             Images are compressed before uploading.
           </p>
 
-          <div
-            id="image-preview-list"
-            class="admin-image-preview"
+          <button
+            type="button"
+            id="open-image-preview"
+            class="primary-button"
+            disabled
+            style="margin:12px 0;"
           >
-            <span>Selected image previews will appear here.</span>
+            Preview selected images (0)
+          </button>
+
+          <div
+            id="image-preview-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="image-preview-title"
+            style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);padding:18px;align-items:center;justify-content:center;"
+          >
+            <section style="position:relative;background:#fff;color:#222;width:min(900px,100%);max-height:90vh;overflow:auto;border-radius:16px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">
+                <h2 id="image-preview-title" style="margin:0;font-size:1.2rem;">
+                  Selected image previews
+                </h2>
+
+                <button
+                  id="close-image-preview"
+                  type="button"
+                  aria-label="Close image previews"
+                  style="border:0;border-radius:8px;padding:9px 14px;cursor:pointer;"
+                >
+                  Close ✕
+                </button>
+              </div>
+
+              <div
+                id="image-preview-list"
+                class="admin-image-preview"
+                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;"
+              ></div>
+
+            </section>
           </div>
 
           <label class="admin-checkbox-label">
@@ -1188,41 +1224,85 @@ function renderAdmin() {
   const form = document.querySelector('#image-upload-form')
   const fileInput = document.querySelector('#furniture-images')
   const previewList = document.querySelector('#image-preview-list')
+  const previewButton = document.querySelector('#open-image-preview')
+  const previewModal = document.querySelector('#image-preview-modal')
+  const closePreviewButton = document.querySelector('#close-image-preview')
   const message = document.querySelector('#upload-message')
   const uploadButton = document.querySelector('#upload-images-button')
 
   function clearPreviews() {
     previewURLs.forEach((url) => URL.revokeObjectURL(url))
     previewURLs = []
+    previewList.innerHTML = ''
   }
 
-  function showImagePreviews() {
-    clearPreviews()
+  function closeImagePreview() {
+    previewModal.style.display = 'none'
+    previewButton.focus()
+  }
 
+  function updatePreviewButton() {
+    const count = fileInput.files?.length || 0
+
+    previewButton.textContent =
+      `Preview selected images (${count})`
+
+    previewButton.disabled = count === 0
+  }
+
+  function openImagePreview() {
     const files = Array.from(fileInput.files || [])
 
-    if (!files.length) {
-      previewList.innerHTML =
-        '<span>Selected image previews will appear here.</span>'
-      return
-    }
+    if (!files.length) return
+
+    clearPreviews()
 
     previewList.innerHTML = files.map((file) => {
       const url = URL.createObjectURL(file)
       previewURLs.push(url)
 
       return `
-        <div class="admin-preview-item">
+        <div class="admin-preview-item" style="overflow:hidden;border-radius:10px;background:#f3f3f3;">
           <img
             src="${escapeHTML(url)}"
             alt="Selected furniture image"
+            style="display:block;width:100%;height:170px;object-fit:cover;"
           >
+
+          <small style="display:block;padding:7px 8px;overflow-wrap:anywhere;">
+            ${escapeHTML(file.name)}
+          </small>
         </div>
       `
     }).join('')
+
+    previewModal.style.display = 'flex'
+    closePreviewButton.focus()
   }
 
-  fileInput.addEventListener('change', showImagePreviews)
+  fileInput.addEventListener('change', () => {
+    clearPreviews()
+    updatePreviewButton()
+  })
+
+  previewButton.addEventListener('click', openImagePreview)
+
+  closePreviewButton.addEventListener('click', closeImagePreview)
+
+  previewModal.addEventListener('click', (event) => {
+    if (event.target === previewModal) {
+      closeImagePreview()
+    }
+  })
+
+  document.addEventListener('keydown', function handlePreviewEscape(event) {
+    if (
+      event.key === 'Escape' &&
+      previewModal.style.display === 'flex'
+    ) {
+      closeImagePreview()
+    }
+  })
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault()
@@ -1269,6 +1349,7 @@ function renderAdmin() {
     }
 
     uploadButton.disabled = true
+    previewButton.disabled = true
     message.textContent = ''
 
     let successfulUploads = 0
@@ -1310,7 +1391,8 @@ function renderAdmin() {
 
       fileInput.value = ''
       clearPreviews()
-      showImagePreviews()
+      updatePreviewButton()
+      closeImagePreview()
 
       if (successfulUploads === files.length) {
         message.textContent = ''
@@ -1339,6 +1421,7 @@ function renderAdmin() {
     } finally {
       uploadButton.disabled = false
       uploadButton.textContent = 'Upload and publish images'
+      updatePreviewButton()
     }
   })
 
@@ -1367,6 +1450,7 @@ function renderAdmin() {
 
   renderAdminProductList()
 }
+
 
 // ==========================================
 // ADMIN IMAGE LIST
