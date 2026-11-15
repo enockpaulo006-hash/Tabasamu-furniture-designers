@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app'
 import {
-  getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
@@ -9,7 +8,7 @@ import { getStorage } from 'firebase/storage'
 import { getAuth } from 'firebase/auth'
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBxmyRUMwinWWXDii5g4wWW',
+  apiKey: 'AIzaSyBxmyRUMwinWWXDii5g4wMPnIOzGiG2B14',
   authDomain: 'tabasamu-furniture-designers.firebaseapp.com',
   projectId: 'tabasamu-furniture-designers',
   storageBucket: 'tabasamu-furniture-designers.firebasestorage.app',
