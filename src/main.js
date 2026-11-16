@@ -1069,7 +1069,7 @@ async function uploadImageToCloudinary(file) {
 
 // ==========================================
 // OWNER ADMIN
-// ==========================================
+
 
 function renderAdmin() {
   const content = document.querySelector('#page-content')
