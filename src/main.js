@@ -1385,7 +1385,7 @@ function renderAdminProductList() {
     list.innerHTML = `
       <p>
         No furniture images have been uploaded yet.
-        Select images above to publish your first designs.
+       
       </p>
     `
     return
