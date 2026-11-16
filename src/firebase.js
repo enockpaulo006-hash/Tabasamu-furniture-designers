@@ -29,4 +29,4 @@ export const db = initializeFirestore(app, {
 export const storage = getStorage(app)
 export const auth = getAuth(app)
 
-export default app
+export default app 
