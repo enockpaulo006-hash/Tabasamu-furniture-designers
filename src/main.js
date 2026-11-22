@@ -382,7 +382,10 @@ function showToast(message) {
 // ==========================================
 
 function navigate(page) {
-  if (page === 'admin' && !isOwner(currentUser)) {
+  if (
+    (page === 'admin' || page === 'admin-images') &&
+    !isOwner(currentUser)
+  ) {
     page = 'login'
   }
 
@@ -1078,23 +1081,28 @@ function renderAdmin() {
 
       <section class="admin-products-section">
 
-        <div class="section-title">
-          <div>
-            <span class="eyebrow">YOUR COLLECTION</span>
-            <h2>Manage images</h2>
+        <div class="admin-library-card">
+          <span class="eyebrow">YOUR COLLECTION</span>
+          <h2>My Uploaded Images</h2>
+
+          <p>
+            View and manage all images uploaded to your website.
+            You can publish, unpublish or delete images.
+          </p>
+
+          <div class="admin-library-count">
+            <strong>${products.length}</strong>
+            <span>uploaded images</span>
           </div>
 
           <button
-            class="text-link"
-            id="refresh-products-button"
+            class="admin-library-button"
+            data-page="admin-images"
             type="button"
           >
-            Refresh
+            <span>View all<br>uploaded<br>images</span>
+            <span class="admin-library-arrow" aria-hidden="true"></span>
           </button>
-        </div>
-
-        <div id="admin-product-list" class="admin-product-list">
-          <p>Loading images...</p>
         </div>
 
       </section>
@@ -1267,12 +1275,6 @@ function renderAdmin() {
     }
   })
 
-  document.querySelector('#refresh-products-button')
-    .addEventListener('click', async () => {
-      clearProductCache()
-      await loadProducts({ showCachedFirst: false })
-    })
-
   document.querySelector('#logout-button')
     .addEventListener('click', async () => {
       try {
@@ -1289,6 +1291,42 @@ function renderAdmin() {
         showToast('Could not sign out. Please try again.')
       }
     })
+
+}
+
+// ==========================================
+// ADMIN IMAGE LIBRARY PAGE
+// ==========================================
+
+function renderAdminImages() {
+  const content = document.querySelector('#page-content')
+
+  if (!isOwner(currentUser)) {
+    currentPage = 'home'
+    renderPage()
+    return
+  }
+
+  content.innerHTML = `
+    <section class="inner-page admin-page admin-images-page">
+
+      <div class="admin-images-heading">
+        <button class="back-button" data-page="admin" type="button">
+          ${icons.left} Back
+        </button>
+
+        <div class="page-heading">
+          <span class="eyebrow">YOUR COLLECTION</span>
+          <h1>My Uploaded Images</h1>
+        </div>
+      </div>
+
+      <div id="admin-product-list" class="admin-product-list">
+        <p>Loading images...</p>
+      </div>
+
+    </section>
+  `
 
   renderAdminProductList()
 }
@@ -1443,7 +1481,10 @@ function renderAdminProductList() {
 function renderPage() {
   clearInterval(slideshowTimer)
 
-  if (currentPage === 'admin' && !isOwner(currentUser)) {
+  if (
+    (currentPage === 'admin' || currentPage === 'admin-images') &&
+    !isOwner(currentUser)
+  ) {
     currentPage = 'login'
   }
 
@@ -1462,6 +1503,10 @@ function renderPage() {
       renderAdmin()
       break
 
+    case 'admin-images':
+      renderAdminImages()
+      break
+
     default:
       currentPage = 'home'
       renderHome()
@@ -1470,7 +1515,8 @@ function renderPage() {
   document.querySelectorAll('.nav-item').forEach((item) => {
     item.classList.toggle(
       'active',
-      item.dataset.page === currentPage
+      item.dataset.page === currentPage ||
+      (currentPage === 'admin-images' && item.dataset.page === 'admin')
     )
   })
 }
@@ -1505,7 +1551,7 @@ onAuthStateChanged(auth, async (user) => {
 
     currentUser = null
 
-    if (currentPage === 'admin') {
+    if (currentPage === 'admin' || currentPage === 'admin-images') {
       currentPage = 'home'
     }
 
@@ -1517,7 +1563,7 @@ onAuthStateChanged(auth, async (user) => {
 
   currentUser = user
 
-  if (!user && currentPage === 'admin') {
+  if (!user && (currentPage === 'admin' || currentPage === 'admin-images')) {
     currentPage = 'home'
   }
 
