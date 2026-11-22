@@ -295,6 +295,67 @@ function renderShell() {
     </footer>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div
+      class="image-lightbox"
+      id="image-lightbox"
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Expanded furniture image"
+    >
+      <button
+        class="lightbox-close"
+        id="lightbox-close"
+        type="button"
+        aria-label="Close image preview"
+      >&times;</button>
+      <img id="lightbox-image" src="" alt="Expanded furniture design">
+    </div>
+
+    <style>
+      .image-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 55px 14px 20px;
+        background: rgba(15, 12, 10, .94);
+      }
+      .image-lightbox.open {
+        display: flex;
+      }
+      .image-lightbox > img {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 5px;
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        width: 42px;
+        height: 42px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255,255,255,.16);
+        color: white;
+        font-size: 32px;
+        line-height: 1;
+      }
+      [data-preview-image] {
+        cursor: zoom-in;
+      }
+      body.lightbox-open {
+        overflow: hidden;
+      }
+    </style>
   `
 }
 
@@ -334,12 +395,63 @@ function navigate(page) {
   })
 }
 
+function openImagePreview(imageURL, altText = 'Furniture design') {
+  const lightbox = document.querySelector('#image-lightbox')
+  const lightboxImage = document.querySelector('#lightbox-image')
+
+  if (!lightbox || !lightboxImage || !imageURL) return
+
+  lightboxImage.src = imageURL
+  lightboxImage.alt = altText
+  lightbox.classList.add('open')
+  lightbox.setAttribute('aria-hidden', 'false')
+  document.body.classList.add('lightbox-open')
+}
+
+function closeImagePreview() {
+  const lightbox = document.querySelector('#image-lightbox')
+  const lightboxImage = document.querySelector('#lightbox-image')
+
+  if (!lightbox || !lightboxImage) return
+
+  lightbox.classList.remove('open')
+  lightbox.setAttribute('aria-hidden', 'true')
+  lightboxImage.src = ''
+  document.body.classList.remove('lightbox-open')
+}
+
 app.addEventListener('click', (event) => {
+  const previewImage = event.target.closest('[data-preview-image]')
+
+  if (previewImage) {
+    event.preventDefault()
+    event.stopPropagation()
+    openImagePreview(
+      previewImage.dataset.previewImage,
+      previewImage.alt || 'Furniture design'
+    )
+    return
+  }
+
+  if (
+    event.target.closest('#lightbox-close') ||
+    event.target.id === 'image-lightbox'
+  ) {
+    closeImagePreview()
+    return
+  }
+
   const button = event.target.closest('[data-page]')
   if (!button) return
 
   event.preventDefault()
   navigate(button.dataset.page)
+})
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeImagePreview()
+  }
 })
 
 // ==========================================
@@ -533,6 +645,7 @@ function renderFeatureCard(type, title, product) {
       <div class="feature-image">
         <img
           ${imageAttributes(product, 600)}
+          data-preview-image="${escapeHTML(getOptimizedImageURL(getImage(product), 1800))}"
           alt="Furniture design"
         >
 
@@ -637,6 +750,7 @@ function renderProducts() {
       <div class="product-image">
         <img
           ${imageAttributes(product, 700)}
+          data-preview-image="${escapeHTML(getOptimizedImageURL(getImage(product), 1800))}"
           alt="Furniture design"
         >
       </div>
@@ -882,6 +996,7 @@ async function uploadImageToCloudinary(file) {
 
   return result
 }
+
 // ==========================================
 // OWNER ADMIN
 // ==========================================
@@ -1205,6 +1320,7 @@ function renderAdminProductList() {
 
       <img
         ${imageAttributes(product, 500)}
+        data-preview-image="${escapeHTML(getOptimizedImageURL(getImage(product), 1800))}"
         alt="Furniture design"
       >
 
@@ -1319,6 +1435,7 @@ function renderAdminProductList() {
     })
   })
 }
+
 // ==========================================
 // PAGE RENDERER
 // ==========================================
