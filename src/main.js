@@ -1091,8 +1091,6 @@ function renderAdmin() {
 
       <section class="admin-panel">
 
-        <h2>Upload furniture images</h2>
-
         <form id="image-upload-form" class="admin-product-form">
 
           <label for="furniture-images">
@@ -1110,15 +1108,12 @@ function renderAdmin() {
 
           <p class="admin-help">
             Maximum ${MAX_IMAGES_PER_UPLOAD} images per upload.
-            Each original image must be 10 MB or smaller.
-            Images are compressed before uploading.
           </p>
 
           <div
             id="image-preview-list"
             class="admin-image-preview"
           >
-            <span>Selected image previews will appear here.</span>
           </div>
 
           <label class="admin-checkbox-label">
