@@ -419,7 +419,6 @@ function renderHome() {
         <h1>
           Beautiful furniture.
           <br>
-          <em>Beautiful living.</em>
         </h1>
 
         <p>
