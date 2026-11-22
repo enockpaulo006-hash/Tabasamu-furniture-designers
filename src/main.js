@@ -11,7 +11,6 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  increment,
 } from 'firebase/firestore'
 
 import {
@@ -48,7 +47,6 @@ const CACHE_DURATION = 6 * 60 * 60 * 1000
 // ==========================================
 
 let products = []
-const selectedDesigns = new Set()
 
 let currentPage = 'home'
 let currentUser = null
@@ -232,8 +230,6 @@ const icons = {
 
   gallery: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
 
-  basket: '<svg viewBox="0 0 24 24"><path d="M3 9h18l-2 12H5L3 9Z"/><path d="m8 9 4-6 4 6M9 13v4m6-4v4"/></svg>',
-
   admin: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>',
 
   arrow: '<svg viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>',
@@ -283,11 +279,6 @@ function renderShell() {
         <span>Gallery</span>
       </button>
 
-      <button class="nav-item" data-page="basket">
-        ${icons.basket}
-        <span>Basket <b id="nav-count">0</b></span>
-      </button>
-
       ${isOwner(currentUser) ? `
         <button class="nav-item" data-page="admin">
           ${icons.admin}
@@ -305,8 +296,6 @@ function renderShell() {
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   `
-
-  updateBasketCount()
 }
 
 // ==========================================
@@ -388,12 +377,6 @@ async function loadProducts(options = {}) {
       .sort((a, b) => getCreatedTime(b) - getCreatedTime(a))
 
     saveProductsToCache(products)
-
-    for (const id of selectedDesigns) {
-      if (!products.some((product) => product.id === id)) {
-        selectedDesigns.delete(id)
-      }
-    }
 
     console.log('Furniture images loaded:', products.length)
 
@@ -650,188 +633,22 @@ function renderProducts() {
   const grid = document.querySelector('#product-grid')
   if (!grid) return
 
-  grid.innerHTML = products.map((product) => {
-    const selected = selectedDesigns.has(product.id)
-
-    return `
-      <article class="product-card">
-
-        <div class="product-image">
-          <img
-            ${imageAttributes(product, 700)}
-            alt="Furniture design"
-          >
-        </div>
-
-        <div class="product-info">
-
-          <button
-            class="select-button ${selected ? 'selected' : ''}"
-            data-select="${escapeHTML(product.id)}"
-          >
-            ${selected ? '✓ Selected' : '+ Select design'}
-          </button>
-
-        </div>
-
-      </article>
-    `
-  }).join('') || `
+  grid.innerHTML = products.map((product) => `
+    <article class="product-card">
+      <div class="product-image">
+        <img
+          ${imageAttributes(product, 700)}
+          alt="Furniture design"
+        >
+      </div>
+    </article>
+  `).join('') || `
     <p class="empty-message">
       No furniture images have been published yet.
     </p>
   `
-
-  grid.querySelectorAll('[data-select]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const id = button.dataset.select
-
-      if (selectedDesigns.has(id)) {
-        selectedDesigns.delete(id)
-        showToast('Design removed from basket.')
-      } else {
-        selectedDesigns.add(id)
-        showToast('Design added to basket.')
-
-        try {
-          await updateDoc(doc(db, 'products', id), {
-            selections: increment(1),
-          })
-
-          const product = products.find((item) => item.id === id)
-
-          if (product) {
-            product.selections = (product.selections || 0) + 1
-            saveProductsToCache(products)
-          }
-        } catch (error) {
-          console.error('Could not update selection count:', error)
-        }
-      }
-
-      renderProducts()
-      updateBasketCount()
-    })
-  })
 }
 
-// ==========================================
-// BASKET
-// ==========================================
-
-function renderBasket() {
-  const content = document.querySelector('#page-content')
-
-  const selected = products.filter((product) =>
-    selectedDesigns.has(product.id)
-  )
-
-  content.innerHTML = `
-    <section class="inner-page">
-
-      <div class="page-heading">
-        <span class="eyebrow">YOUR SELECTION</span>
-        <h1>My basket</h1>
-        <p>Review your favourite furniture designs.</p>
-      </div>
-
-      <div class="basket-products">
-
-        ${selected.length ? selected.map((product) => `
-          <article class="basket-product">
-
-            <img
-              ${imageAttributes(product, 400)}
-              alt="Selected furniture design"
-            >
-
-            <div>
-              <strong>Selected design</strong>
-              <small>Furniture design</small>
-            </div>
-
-            <button
-              class="remove-button"
-              data-remove="${escapeHTML(product.id)}"
-            >
-              Remove
-            </button>
-
-          </article>
-        `).join('') : `
-          <div class="empty-basket">
-            <div class="empty-icon">${icons.basket}</div>
-            <h2>Your basket is empty</h2>
-            <p>Explore our gallery and select designs you like.</p>
-
-            <button class="primary-button" data-page="gallery">
-              Explore gallery
-            </button>
-          </div>
-        `}
-
-      </div>
-
-      ${selected.length ? `
-        <div class="basket-summary">
-          <strong>${selected.length} design(s) selected</strong>
-
-          <button class="primary-button" id="send-inquiry">
-            Request quotation ${icons.arrow}
-          </button>
-        </div>
-      ` : ''}
-
-    </section>
-  `
-
-  content.querySelectorAll('[data-remove]').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectedDesigns.delete(button.dataset.remove)
-      renderBasket()
-      updateBasketCount()
-      showToast('Design removed from basket.')
-    })
-  })
-
-  document.querySelector('#send-inquiry')?.addEventListener(
-    'click',
-    sendInquiry
-  )
-}
-
-// ==========================================
-// WHATSAPP QUOTATION REQUEST
-// ==========================================
-
-function sendInquiry() {
-  const selected = products.filter((product) =>
-    selectedDesigns.has(product.id)
-  )
-
-  if (!selected.length) return
-
-  const list = selected.map((product, index) =>
-    `${index + 1}. Selected furniture design`
-  ).join('\n')
-
-  const message = `
-Hello Tabasamu Furniture Designers!
-
-I would like to enquire about these furniture designs:
-
-${list}
-
-Please contact me with more information.
-
-Thank you!
-  `.trim()
-
-  const url =
-    `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
-
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
 // ==========================================
 // OWNER LOGIN
 // ==========================================
@@ -1068,7 +885,7 @@ async function uploadImageToCloudinary(file) {
 }
 // ==========================================
 // OWNER ADMIN
-
+// ==========================================
 
 function renderAdmin() {
   const content = document.querySelector('#page-content')
@@ -1379,7 +1196,6 @@ function renderAdminProductList() {
     list.innerHTML = `
       <p>
         No furniture images have been uploaded yet.
-       
       </p>
     `
     return
@@ -1487,13 +1303,10 @@ function renderAdminProductList() {
           (item) => item.id !== productId
         )
 
-        selectedDesigns.delete(productId)
-
         clearProductCache()
         saveProductsToCache(products)
 
         renderAdminProductList()
-        updateBasketCount()
 
         showToast('Image removed from the website.')
 
@@ -1507,7 +1320,6 @@ function renderAdminProductList() {
     })
   })
 }
-
 // ==========================================
 // PAGE RENDERER
 // ==========================================
@@ -1524,10 +1336,6 @@ function renderPage() {
   switch (currentPage) {
     case 'gallery':
       renderGallery()
-      break
-
-    case 'basket':
-      renderBasket()
       break
 
     case 'login':
@@ -1549,20 +1357,6 @@ function renderPage() {
       item.dataset.page === currentPage
     )
   })
-
-  updateBasketCount()
-}
-
-// ==========================================
-// BASKET COUNT
-// ==========================================
-
-function updateBasketCount() {
-  const count = document.querySelector('#nav-count')
-
-  if (count) {
-    count.textContent = selectedDesigns.size
-  }
 }
 
 // ==========================================
